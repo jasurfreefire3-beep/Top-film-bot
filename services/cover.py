@@ -53,3 +53,4 @@ def get_video_thumbnail() -> Optional[FSInputFile]:
     if os.path.exists(COVER_FILE):
         return FSInputFile(COVER_FILE)
     return None
+

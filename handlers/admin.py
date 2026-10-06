@@ -1,13 +1,14 @@
 import asyncio
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from config import ADMINS, BOT_USERNAME
 from database import (
     get_users_count,
     get_movies_count,
+    get_series_count,
     get_next_movie_code,
     is_movie_code_exists,
     add_movie,
@@ -325,11 +326,13 @@ async def show_stats(callback: CallbackQuery):
 
     users_count = await get_users_count()
     movies_count = await get_movies_count()
+    series_count = await get_series_count()
 
     text = (
         "📊 <b>Bot statistikasi:</b>\n\n"
         f"👥 Foydalanuvchilar soni: <b>{users_count}</b> ta\n"
-        f"🎬 Bazadagi kinolar soni: <b>{movies_count}</b> ta\n\n"
+        f"🎬 Bazadagi kinolar soni: <b>{movies_count}</b> ta\n"
+        f"📺 Bazadagi seriallar soni: <b>{series_count}</b> ta\n\n"
         "⚡️ Bot sozlamalari va server barqaror ishlamoqda."
     )
 
