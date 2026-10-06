@@ -7,15 +7,40 @@ def get_admin_menu() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="🎬 Kino qo'shish", callback_data="admin_add_movie"),
-                InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats")
+                InlineKeyboardButton(text="📺 Seriallar", callback_data="admin_series_menu")
             ],
             [
-                InlineKeyboardButton(text="📑 Oxirgi kinolar", callback_data="admin_recent_movies"),
-                InlineKeyboardButton(text="🗑 Kinoni o'chirish", callback_data="admin_delete_movie")
+                InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats"),
+                InlineKeyboardButton(text="📑 Oxirgi kinolar", callback_data="admin_recent_movies")
             ],
             [
-                InlineKeyboardButton(text="📢 Majburiy obuna", callback_data="admin_channels"),
+                InlineKeyboardButton(text="🗑 Kinoni o'chirish", callback_data="admin_delete_movie"),
+                InlineKeyboardButton(text="📢 Majburiy obuna", callback_data="admin_channels")
+            ],
+            [
                 InlineKeyboardButton(text="✉️ Xabar yuborish", callback_data="admin_broadcast")
+            ]
+        ]
+    )
+
+
+def get_series_admin_menu() -> InlineKeyboardMarkup:
+    """Seriallar boshqaruv menyusi"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Yangi serial yaratish", callback_data="admin_add_series"),
+                InlineKeyboardButton(text="🎬 Qism qo'shish", callback_data="admin_add_episode")
+            ],
+            [
+                InlineKeyboardButton(text="🗑 Qism o'chirish", callback_data="admin_delete_episode"),
+                InlineKeyboardButton(text="📑 Seriallar ro'yxati", callback_data="admin_list_series")
+            ],
+            [
+                InlineKeyboardButton(text="❌ Serialni o'chirish", callback_data="admin_delete_series")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="cancel_action")
             ]
         ]
     )

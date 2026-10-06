@@ -12,9 +12,15 @@ Python va zamonaviy **aiogram 3** freymvorki asosida yaratilgan professional Tel
   - Kino nomini kiritish;
   - Avtomatik navbatdagi kodni qabul qilish yoki o'zingiz istagan noyob raqamli kodni belgilash;
   - Har qanday bosqichda amallarni bekor qilish (`❌ Bekor qilish`).
+- **📺 Seriallar boshqaruvi**:
+  - **➕ Yangi serial yaratish**: Serial nomini kiritish, avtomatik yoki qo'lda kod belgilash;
+  - **🎬 Qism qo'shish**: Serial kodi va qism raqamini kiritib, video yoki fayl yuklash;
+  - **🗑 Qism o'chirish**: Muayyan serialdan aniq qismni o'chirish;
+  - **📑 Seriallar ro'yxati**: Barcha mavjud seriallar va ulardagi qismlar sonini ko'rish;
+  - **❌ Serialni o'chirish**: Serial va uning barcha qismlarini bazadan to'liq o'chirish.
 - **📊 Statistika**:
   - Bot foydalanuvchilari umumiy soni;
-  - Bazadagi barcha kinolar soni.
+  - Bazadagi barcha kinolar va seriallar soni.
 - **📑 Oxirgi kinolar**:
   - Eng so'nggi qo'shilgan 10 ta kinoning kodi, nomi va ko'rishlar soni.
 - **🗑 Kinoni o'chirish**:
@@ -37,22 +43,26 @@ Python va zamonaviy **aiogram 3** freymvorki asosida yaratilgan professional Tel
 ---
 
 ### 👤 Foydalanuvchilar uchun:
+- **📺 Seriallar va qismlarni tomosha qilish**:
+  - Serial kodini yuborganda (`1`, `2`...) barcha qismlar menyusi (`🎬 1-qism`, `🎬 2-qism`...) chiqadi;
+  - Har bir qism ostida «⬅️ Barcha qismlar», «↗️ Qismni ulashish», «🎬 Ko'proq filmlar» va «💾 Saqlab qo'yish» tugmalari mavjud;
+  - Nom bo'yicha qidirganda ham kinolar, ham seriallar qidiriladi.
 - **🎬 Start menyusi**:
   - `/start` bosilganda **[TOP FILM](https://t.me/topfilmlar_robot)** giperhavolasi va xabar tagida to'g'ridan-to'g'ri kanalga o'tuvchi **«🎬 Barcha Filmlar»** (https://t.me/TopFilmlarUZB1) tugmasi chiqadi;
 - **🔢 Kod orqali kinoni olish**:
   - Foydalanuvchi kino kodini (masalan: `1`, `15`) yuborsa, bot darhol kinoni barcha ma'lumotlari bilan chiqarib beradi.
 - **🔗 Deep-link havolalar va Auto havola**:
-  - Har bir kino qo'shilganda bot darhol auto havolani (`https://t.me/topfilmlar_robot?start=KOD`) va kanal uchun tayyor post shablonini beradi.
+  - Har bir kino yoki serial qo'shilganda bot darhol auto havolani (`https://t.me/topfilmlar_robot?start=KOD` yoki `start=series_KOD`) va kanal uchun tayyor post shablonini beradi.
 - **🎬 Kino tagidagi interaktiv tugmalar**:
   - **↗️ Filmni ulashish** — do'stlarga yoki guruhlarga ulashish;
   - **🎬 Ko'proq filmlar** — to'g'ridan-to'g'ri https://t.me/TopFilmlarUZB1 kanaliga yo'naltiradi;
-  - **💾 Saqlab qo'yish** — filmni foydalanuvchining shaxsiy to'plamiga saqlaydi.
-- **⭐️ Saqlangan filmlar (`/saved`)**:
-  - Foydalanuvchi o'zi saqlab qo'ygan barcha filmlar ro'yxatini ko'rishi, ularni bir bosish bilan ochishi yoki o'chirishi mumkin.
+  - **💾 Saqlab qo'yish** — filmni yoki serialni foydalanuvchining shaxsiy to'plamiga saqlaydi.
+- **⭐️ Saqlangan filmlar va seriallar (`/saved`)**:
+  - Foydalanuvchi o'zi saqlab qo'ygan barcha filmlar va seriallar ro'yxatini ko'rishi, ularni bir bosish bilan ochishi yoki o'chirishi mumkin.
 - **🔍 Qidiruv**:
-  - Kino nomi orqali qidirish (masalan: `Qasoskorlar`). Bir nechta kino chiqsa, qulay tugmalar orqali tanlash imkoniyati.
+  - Kino yoki serial nomi orqali qidirish (masalan: `Qasoskorlar`, `Kurtlar`). Bir nechta natija chiqsa, qulay tugmalar orqali tanlash imkoniyati.
 - **👁 Ko'rishlar va yuklanishlar hisoblagichi**:
-  - Kino yuborilganda uning nomi ostida necha marta yuklangani aniq ko'rsatiladi.
+  - Kino yoki serial yuborilganda uning nomi ostida necha marta yuklangani aniq ko'rsatiladi.
 
 ---
 

@@ -17,8 +17,28 @@ from database import (
     add_channel,
     get_all_channels,
     delete_channel,
+    add_series,
+    get_series_by_code,
+    get_next_series_code,
+    is_series_code_exists,
+    delete_series,
+    get_all_series,
+    add_episode,
+    get_episodes_by_series,
+    get_episode,
+    delete_episode,
+    get_next_episode_number,
 )
-from states import AddMovieState, DeleteMovieState, BroadcastState, AddChannelState
+from states import (
+    AddMovieState,
+    DeleteMovieState,
+    BroadcastState,
+    AddChannelState,
+    AddSeriesState,
+    AddEpisodeState,
+    DeleteEpisodeState,
+    DeleteSeriesState,
+)
 from keyboards.admin_kb import (
     get_admin_menu,
     get_cancel_kb,
@@ -27,6 +47,7 @@ from keyboards.admin_kb import (
     get_broadcast_choice_kb,
     get_button_color_kb,
     get_broadcast_preview_kb,
+    get_series_admin_menu,
 )
 
 admin_router = Router()
@@ -844,5 +865,471 @@ async def process_invite_link(message: Message, state: FSMContext):
         await message.answer("❌ Kanalni saqlashda xatolik yuz berdi.", reply_markup=get_admin_menu())
 
     await state.clear()
+
+
+# ------------------ SERIALLAR VA QISMLAR BOSHQARUVI ------------------ #
+
+@admin_router.callback_query(F.data == "admin_series_menu")
+async def show_series_menu(callback: CallbackQuery, state: FSMContext):
+    """Seriallar boshqaruv menyusini ko'rsatish"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.clear()
+    series_cnt = await get_series_count()
+    await callback.message.edit_text(
+        "📺 <b>Seriallar boshqaruvi bo'limi:</b>\n\n"
+        f"Ayni vaqtda bazada: <b>{series_cnt}</b> ta serial mavjud.\n\n"
+        "Quyidagi amallardan birini tanlang:",
+        reply_markup=get_series_admin_menu(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == "admin_add_series")
+async def start_add_series(callback: CallbackQuery, state: FSMContext):
+    """Yangi serial yaratishni boshlash"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.set_state(AddSeriesState.waiting_for_title)
+    await callback.message.edit_text(
+        "📺 <b>Yangi serial yaratish:</b>\n\n"
+        "Serial nomini kiriting:\n<i>(Masalan: Kurtlar Vadisi)</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.message(AddSeriesState.waiting_for_title, F.text)
+async def process_series_title(message: Message, state: FSMContext):
+    """Serial nomini qabul qilish va kodni taklif etish"""
+    if not is_admin(message.from_user.id):
+        return
+
+    title = message.text.strip()
+    await state.update_data(series_title=title)
+
+    suggested_code = await get_next_series_code()
+
+    # Kod tanlash tugmalari
+    code_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"✅ Tavsiya etilgan kod ({suggested_code})",
+                    callback_data=f"use_series_code_{suggested_code}"
+                )
+            ],
+            [
+                InlineKeyboardButton(text="✍️ O'zim kod yozaman", callback_data="custom_series_code")
+            ],
+            [
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")
+            ]
+        ]
+    )
+
+    await message.answer(
+        f"📺 <b>Serial nomi:</b> {title}\n\n"
+        f"🔢 <b>Tavsiya etilgan kod:</b> <code>{suggested_code}</code>\n\n"
+        f"Ushbu kodni ma'qullaysizmi yoki boshqa kod kiritasizmi?",
+        reply_markup=code_kb,
+        parse_mode="HTML"
+    )
+
+
+@admin_router.callback_query(F.data.startswith("use_series_code_"))
+async def use_suggested_series_code(callback: CallbackQuery, state: FSMContext):
+    """Tavsiya etilgan kod bilan serialni yaratish"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    code = int(callback.data.split("_")[3])
+    data = await state.get_data()
+    title = data.get("series_title")
+
+    success = await add_series(code=code, title=title)
+    if success:
+        deep_link = f"https://t.me/{BOT_USERNAME}?start=series_{code}"
+        post_template = (
+            f"📺 <b>Serial:</b> {title}\n"
+            f"🔢 <b>Serial kodi:</b> <code>{code}</code>\n"
+            f"📥 <b>Barcha qismlarni ko'rish:</b>\n{deep_link}"
+        )
+        await callback.message.edit_text(
+            f"🎉 <b>Serial muvaffaqiyatli yaratildi!</b>\n\n"
+            f"📺 <b>Nomi:</b> {title}\n"
+            f"🔢 <b>Kodi:</b> <code>{code}</code>\n"
+            f"🔗 <b>Auto havola:</b> <code>{deep_link}</code>\n\n"
+            f"📋 <b>Kanal uchun tayyor post:</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{post_template}\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"<i>Endi ushbu serialga «🎬 Qism qo'shish» tugmasi orqali qismlarni yuklashingiz mumkin.</i>",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.edit_text("❌ Serialni yaratishda xatolik yuz berdi.", reply_markup=get_series_admin_menu())
+
+    await state.clear()
+    await callback.answer()
+
+
+@admin_router.callback_query(F.data == "custom_series_code")
+async def ask_custom_series_code(callback: CallbackQuery, state: FSMContext):
+    """Qo'lda serial kodi kiritishni so'rash"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.set_state(AddSeriesState.waiting_for_code)
+    await callback.message.edit_text(
+        "✍️ <b>Serial uchun noyob raqamli kod kiriting:</b>\n<i>(Masalan: 50, 100 va h.k.)</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.message(AddSeriesState.waiting_for_code, F.text)
+async def process_custom_series_code(message: Message, state: FSMContext):
+    """Qo'lda kiritilgan kod bilan serialni yaratish"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Kod raqam bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    code = int(text)
+    if await is_series_code_exists(code) or await is_movie_code_exists(code):
+        return await message.answer(f"⚠️ <b>{code}</b> kodi allaqachon mavjud! Boshqa kod kiriting:", reply_markup=get_cancel_kb(), parse_mode="HTML")
+
+    data = await state.get_data()
+    title = data.get("series_title")
+
+    success = await add_series(code=code, title=title)
+    if success:
+        deep_link = f"https://t.me/{BOT_USERNAME}?start=series_{code}"
+        post_template = (
+            f"📺 <b>Serial:</b> {title}\n"
+            f"🔢 <b>Serial kodi:</b> <code>{code}</code>\n"
+            f"📥 <b>Barcha qismlarni ko'rish:</b>\n{deep_link}"
+        )
+        await message.answer(
+            f"🎉 <b>Serial muvaffaqiyatli yaratildi!</b>\n\n"
+            f"📺 <b>Nomi:</b> {title}\n"
+            f"🔢 <b>Kodi:</b> <code>{code}</code>\n"
+            f"🔗 <b>Auto havola:</b> <code>{deep_link}</code>\n\n"
+            f"📋 <b>Kanal uchun tayyor post:</b>\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{post_template}\n"
+            f"━━━━━━━━━━━━━━━━━━",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer("❌ Serialni yaratishda xatolik yuz berdi.", reply_markup=get_series_admin_menu())
+
+    await state.clear()
+
+
+# ------------------ QISM QO'SHISH ------------------ #
+
+@admin_router.callback_query(F.data == "admin_add_episode")
+async def start_add_episode(callback: CallbackQuery, state: FSMContext):
+    """Serialga qism qo'shishni boshlash: serial kodini so'rash"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.set_state(AddEpisodeState.waiting_for_series_code)
+    await callback.message.edit_text(
+        "🎬 <b>Serialga qism qo'shish:</b>\n\n"
+        "Qaysi serialga qism qo'shmoqchisiz? Serial kodini kiriting:\n<i>(Masalan: 1)</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.message(AddEpisodeState.waiting_for_series_code, F.text)
+async def process_episode_series_code(message: Message, state: FSMContext):
+    """Serial kodi kiritilganda tekshirish va qism raqamini so'rash"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Serial kodi raqam bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    series_code = int(text)
+    series = await get_series_by_code(series_code, increment_views=False)
+    if not series:
+        return await message.answer(f"❌ <b>{series_code}</b>-kodli serial topilmadi. Qaytadan kiriting:", reply_markup=get_cancel_kb(), parse_mode="HTML")
+
+    next_ep = await get_next_episode_number(series_code)
+    await state.update_data(series_code=series_code, series_title=series["title"])
+    await state.set_state(AddEpisodeState.waiting_for_episode_number)
+
+    await message.answer(
+        f"📺 Serial: <b>{series['title']}</b> (Kod: <code>{series_code}</code>)\n\n"
+        f"🔢 <b>Qism raqamini kiriting:</b>\n"
+        f"<i>(Tavsiya etiladi: <b>{next_ep}</b>)</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+
+
+@admin_router.message(AddEpisodeState.waiting_for_episode_number, F.text)
+async def process_episode_number(message: Message, state: FSMContext):
+    """Qism raqamini qabul qilish va video so'rash"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Qism raqami musbat butun son bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    ep_num = int(text)
+    await state.update_data(episode_number=ep_num)
+    await state.set_state(AddEpisodeState.waiting_for_video)
+
+    data = await state.get_data()
+    await message.answer(
+        f"📺 <b>{data['series_title']}</b> — <b>{ep_num}-qism</b>\n\n"
+        "📹 <b>Endi ushbu qism videosini yuboring yoki boshqa kanaldan FORWARD qiling:</b>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+
+
+@admin_router.message(AddEpisodeState.waiting_for_video, F.video)
+async def process_episode_video(message: Message, state: FSMContext):
+    """Qism videosini saqlash"""
+    if not is_admin(message.from_user.id):
+        return
+
+    data = await state.get_data()
+    series_code = data["series_code"]
+    series_title = data["series_title"]
+    episode_number = data["episode_number"]
+    file_id = message.video.file_id
+    caption = message.caption or ""
+
+    success = await add_episode(
+        series_code=series_code,
+        episode_number=episode_number,
+        file_id=file_id,
+        file_type="video",
+        caption=caption
+    )
+
+    if success:
+        await message.answer(
+            f"🎉 <b>Qism muvaffaqiyatli saqlandi!</b>\n\n"
+            f"📺 Serial: <b>{series_title}</b>\n"
+            f"🎬 Qism: <b>{episode_number}-qism</b>\n"
+            f"🔢 Serial kodi: <code>{series_code}</code>\n\n"
+            f"<i>Foydalanuvchilar botga <code>{series_code}</code> yozib barcha qismlarni ko'rishlari mumkin.</i>",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer("❌ Qismni saqlashda xatolik yuz berdi.", reply_markup=get_series_admin_menu())
+
+    await state.clear()
+
+
+@admin_router.message(AddEpisodeState.waiting_for_video, F.document)
+async def process_episode_document(message: Message, state: FSMContext):
+    """Qism faylini (hujjatini) saqlash"""
+    if not is_admin(message.from_user.id):
+        return
+
+    data = await state.get_data()
+    series_code = data["series_code"]
+    series_title = data["series_title"]
+    episode_number = data["episode_number"]
+    file_id = message.document.file_id
+    caption = message.caption or ""
+
+    success = await add_episode(
+        series_code=series_code,
+        episode_number=episode_number,
+        file_id=file_id,
+        file_type="document",
+        caption=caption
+    )
+
+    if success:
+        await message.answer(
+            f"🎉 <b>Qism muvaffaqiyatli saqlandi!</b>\n\n"
+            f"📺 Serial: <b>{series_title}</b>\n"
+            f"🎬 Qism: <b>{episode_number}-qism</b>\n"
+            f"🔢 Serial kodi: <code>{series_code}</code>",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer("❌ Qismni saqlashda xatolik yuz berdi.", reply_markup=get_series_admin_menu())
+
+    await state.clear()
+
+
+# ------------------ QISM O'CHIRISH ------------------ #
+
+@admin_router.callback_query(F.data == "admin_delete_episode")
+async def start_delete_episode(callback: CallbackQuery, state: FSMContext):
+    """Qism o'chirishni boshlash"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.set_state(DeleteEpisodeState.waiting_for_series_code)
+    await callback.message.edit_text(
+        "🗑 <b>Serialdan qism o'chirish:</b>\n\n"
+        "Serial kodini kiriting:\n<i>(Masalan: 1)</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.message(DeleteEpisodeState.waiting_for_series_code, F.text)
+async def process_delete_episode_series(message: Message, state: FSMContext):
+    """Qism o'chirish uchun serial kodini qabul qilish"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Serial kodi raqam bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    series_code = int(text)
+    series = await get_series_by_code(series_code, increment_views=False)
+    if not series:
+        return await message.answer(f"❌ <b>{series_code}</b>-kodli serial topilmadi.", reply_markup=get_cancel_kb(), parse_mode="HTML")
+
+    episodes = await get_episodes_by_series(series_code)
+    if not episodes:
+        await state.clear()
+        return await message.answer(f"⚠️ <b>{series['title']}</b> serialida hali hech qanday qism yo'q.", reply_markup=get_series_admin_menu(), parse_mode="HTML")
+
+    ep_list = ", ".join([str(e["episode_number"]) for e in episodes])
+    await state.update_data(series_code=series_code)
+    await state.set_state(DeleteEpisodeState.waiting_for_episode_number)
+
+    await message.answer(
+        f"📺 Serial: <b>{series['title']}</b>\n"
+        f"Mavjud qismlar: <b>{ep_list}</b>\n\n"
+        "🗑 <b>O'chirmoqchi bo'lgan qism raqamini kiriting:</b>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+
+
+@admin_router.message(DeleteEpisodeState.waiting_for_episode_number, F.text)
+async def process_delete_episode_num(message: Message, state: FSMContext):
+    """Qismni o'chirish"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Qism raqam bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    ep_num = int(text)
+    data = await state.get_data()
+    series_code = data["series_code"]
+
+    deleted = await delete_episode(series_code, ep_num)
+    if deleted:
+        await message.answer(
+            f"✅ <b>{series_code}</b>-kodli serialdan <b>{ep_num}-qism</b> muvaffaqiyatli o'chirildi!",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"❌ <b>{ep_num}-qism</b> topilmadi yoki allaqachon o'chirilgan.",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+
+    await state.clear()
+
+
+# ------------------ SERIALNI O'CHIRISH ------------------ #
+
+@admin_router.callback_query(F.data == "admin_delete_series")
+async def start_delete_series(callback: CallbackQuery, state: FSMContext):
+    """Serialni o'chirishni boshlash"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    await state.set_state(DeleteSeriesState.waiting_for_series_code)
+    await callback.message.edit_text(
+        "❌ <b>Serialni o'chirish:</b>\n\n"
+        "O'chirmoqchi bo'lgan serial kodini kiriting:\n<i>(Masalan: 1)</i>\n\n"
+        "⚠️ <i>Diqqat: Serial o'chirilsa, uning barcha qismlari ham o'chiriladi!</i>",
+        reply_markup=get_cancel_kb(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@admin_router.message(DeleteSeriesState.waiting_for_series_code, F.text)
+async def process_delete_series(message: Message, state: FSMContext):
+    """Serialni o'chirish"""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.text.strip()
+    if not text.isdigit():
+        return await message.answer("⚠️ Serial kodi raqam bo'lishi kerak! Qayta kiriting:", reply_markup=get_cancel_kb())
+
+    code = int(text)
+    deleted = await delete_series(code)
+    if deleted:
+        await message.answer(
+            f"✅ Kod: <b>{code}</b> bo'lgan serial va uning barcha qismlari o'chirildi!",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"❌ Kod: <b>{code}</b> bo'lgan serial topilmadi.",
+            reply_markup=get_series_admin_menu(),
+            parse_mode="HTML"
+        )
+
+    await state.clear()
+
+
+# ------------------ SERIALLAR RO'YXATI ------------------ #
+
+@admin_router.callback_query(F.data == "admin_list_series")
+async def show_all_series_admin(callback: CallbackQuery):
+    """Barcha seriallar ro'yxatini ko'rsatish"""
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("Ruxsat berilmagan!", show_alert=True)
+
+    series_list = await get_all_series()
+    if not series_list:
+        await callback.message.edit_text("📑 Bazada hozircha seriallar mavjud emas.", reply_markup=get_series_admin_menu())
+        return await callback.answer()
+
+    text = "📑 <b>Mavjud seriallar ro'yxati:</b>\n\n"
+    for idx, s in enumerate(series_list, start=1):
+        text += (
+            f"{idx}. <b>{s['title']}</b>\n"
+            f"   🔢 Kod: <code>{s['code']}</code> | 🎬 Qismlar: <b>{s['episode_count']}</b> ta | 👁 {s['views']}\n\n"
+        )
+
+    await callback.message.edit_text(text, reply_markup=get_series_admin_menu(), parse_mode="HTML")
+    await callback.answer()
+
 
 

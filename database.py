@@ -89,7 +89,36 @@ async def init_db() -> None:
                 UNIQUE(user_id, movie_code)
             );
         """)
-        logger.info("PostgreSQL jadvallari va JSON strukturalari tayyor.")
+
+        # Seriallar jadvali
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS series (
+                id SERIAL PRIMARY KEY,
+                code INTEGER UNIQUE NOT NULL,
+                title TEXT NOT NULL,
+                caption TEXT,
+                views INTEGER NOT NULL DEFAULT 0,
+                data JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Serial qismlari jadvali
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS episodes (
+                id SERIAL PRIMARY KEY,
+                series_code INTEGER NOT NULL,
+                episode_number INTEGER NOT NULL,
+                file_id TEXT NOT NULL,
+                file_type VARCHAR(50) NOT NULL DEFAULT 'video',
+                caption TEXT,
+                views INTEGER NOT NULL DEFAULT 0,
+                data JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(series_code, episode_number)
+            );
+        """)
+        logger.info("PostgreSQL jadvallari, seriallar va JSON strukturalari tayyor.")
 
 
 # ------------------ FOYDALANUVCHILAR ------------------ #
@@ -225,6 +254,7 @@ async def delete_movie(code: int) -> bool:
     """Kino kodiga ko'ra kinoni o'chirish"""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM saved_movies WHERE movie_code = $1;", code)
         res = await conn.execute("DELETE FROM movies WHERE code = $1;", code)
         # res looks like 'DELETE 1'
         return res.endswith("1")
@@ -338,14 +368,220 @@ async def is_movie_saved(user_id: int, movie_code: int) -> bool:
 
 
 async def get_user_saved_movies(user_id: int) -> List[Dict[str, Any]]:
-    """Foydalanuvchi saqlagan barcha filmlar ro'yxatini olish"""
+    """Foydalanuvchi saqlagan barcha filmlar va seriallar ro'yxatini olish"""
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT m.code, m.title, m.views, s.created_at as saved_at, m.data as movie_data
-            FROM saved_movies s
-            JOIN movies m ON s.movie_code = m.code
-            WHERE s.user_id = $1
-            ORDER BY s.id DESC;
+            SELECT 
+                COALESCE(m.code, s.code) as code,
+                COALESCE(m.title, s.title) as title,
+                COALESCE(m.views, s.views) as views,
+                sm.created_at as saved_at,
+                CASE WHEN s.code IS NOT NULL THEN 'series' ELSE 'movie' END as item_type
+            FROM saved_movies sm
+            LEFT JOIN movies m ON sm.movie_code = m.code
+            LEFT JOIN series s ON sm.movie_code = s.code
+            WHERE sm.user_id = $1 AND (m.code IS NOT NULL OR s.code IS NOT NULL)
+            ORDER BY sm.id DESC;
         """, user_id)
         return [dict(r) for r in rows]
+
+
+# ------------------ SERIALLAR VA QISMLAR (JSON FORMATDA) ------------------ #
+
+async def get_next_series_code() -> int:
+    """Navbatdagi tavsiya etiladigan serial kodini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        max_movie = await conn.fetchval("SELECT MAX(code) FROM movies;") or 0
+        max_series = await conn.fetchval("SELECT MAX(code) FROM series;") or 0
+        return max(max_movie, max_series) + 1
+
+
+async def is_series_code_exists(code: int) -> bool:
+    """Serial kodi mavjudligini tekshirish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        val = await conn.fetchval("SELECT 1 FROM series WHERE code = $1 LIMIT 1;", code)
+        return val is not None
+
+
+async def add_series(code: int, title: str, caption: Optional[str] = None) -> bool:
+    """Yangi serial yaratish"""
+    try:
+        pool = await get_pool()
+        series_json = json.dumps({
+            "code": code,
+            "title": title,
+            "caption": caption,
+            "views": 0,
+            "type": "series"
+        }, ensure_ascii=False)
+
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO series (code, title, caption, data)
+                VALUES ($1, $2, $3, $4::jsonb);
+            """, code, title, caption, series_json)
+            return True
+    except Exception as e:
+        logger.error(f"Serial yaratishda xatolik: {e}")
+        return False
+
+
+async def get_series_by_code(code: int, increment_views: bool = True) -> Optional[Dict[str, Any]]:
+    """Serial ma'lumotlarini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM series WHERE code = $1;", code)
+        if not row:
+            return None
+        series = dict(row)
+        if increment_views:
+            await conn.execute("UPDATE series SET views = views + 1 WHERE code = $1;", code)
+            series["views"] += 1
+        return series
+
+
+async def delete_series(code: int) -> bool:
+    """Serialni va uning barcha qismlarini o'chirish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM saved_movies WHERE movie_code = $1;", code)
+        await conn.execute("DELETE FROM episodes WHERE series_code = $1;", code)
+        res = await conn.execute("DELETE FROM series WHERE code = $1;", code)
+        return res.endswith("1")
+
+
+async def get_all_series() -> List[Dict[str, Any]]:
+    """Barcha seriallar ro'yxatini va qismlar sonini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT s.code, s.title, s.views, s.created_at, COUNT(e.id) as episode_count
+            FROM series s
+            LEFT JOIN episodes e ON s.code = e.series_code
+            GROUP BY s.code, s.title, s.views, s.created_at, s.id
+            ORDER BY s.id DESC;
+        """)
+        return [dict(r) for r in rows]
+
+
+async def search_series_by_title(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Seriallarni nomi bo'yicha qidirish"""
+    pool = await get_pool()
+    search_pattern = f"%{query.strip()}%"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT s.code, s.title, s.views, s.created_at, COUNT(e.id) as episode_count
+            FROM series s
+            LEFT JOIN episodes e ON s.code = e.series_code
+            WHERE s.title ILIKE $1
+            GROUP BY s.code, s.title, s.views, s.created_at, s.id
+            ORDER BY s.id DESC
+            LIMIT $2;
+        """, search_pattern, limit)
+        return [dict(r) for r in rows]
+
+
+async def get_series_count() -> int:
+    """Seriallar umumiy sonini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        val = await conn.fetchval("SELECT COUNT(*) FROM series;")
+        return val or 0
+
+
+# ------------------ QISMLAR (EPISODES) ------------------ #
+
+async def get_next_episode_number(series_code: int) -> int:
+    """Serial uchun navbatdagi qism raqamini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        max_ep = await conn.fetchval("""
+            SELECT MAX(episode_number) FROM episodes WHERE series_code = $1;
+        """, series_code)
+        if max_ep is not None:
+            return max_ep + 1
+        return 1
+
+
+async def add_episode(series_code: int, episode_number: int, file_id: str, file_type: str = "video", caption: Optional[str] = None) -> bool:
+    """Serialga yangi qism qo'shish"""
+    try:
+        pool = await get_pool()
+        ep_json = json.dumps({
+            "series_code": series_code,
+            "episode_number": episode_number,
+            "file_id": file_id,
+            "file_type": file_type,
+            "caption": caption
+        }, ensure_ascii=False)
+
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO episodes (series_code, episode_number, file_id, file_type, caption, data)
+                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+                ON CONFLICT (series_code, episode_number) DO UPDATE SET
+                    file_id = EXCLUDED.file_id,
+                    file_type = EXCLUDED.file_type,
+                    caption = EXCLUDED.caption,
+                    data = EXCLUDED.data;
+            """, series_code, episode_number, file_id, file_type, caption, ep_json)
+            return True
+    except Exception as e:
+        logger.error(f"Qism qo'shishda xatolik: {e}")
+        return False
+
+
+async def get_episodes_by_series(series_code: int) -> List[Dict[str, Any]]:
+    """Serialning barcha qismlarini olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT * FROM episodes 
+            WHERE series_code = $1 
+            ORDER BY episode_number ASC;
+        """, series_code)
+        return [dict(r) for r in rows]
+
+
+async def get_episode(series_code: int, episode_number: int, increment_views: bool = True) -> Optional[Dict[str, Any]]:
+    """Aniq bir qismni olish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT * FROM episodes 
+            WHERE series_code = $1 AND episode_number = $2;
+        """, series_code, episode_number)
+        if not row:
+            return None
+        ep = dict(row)
+        if increment_views:
+            await conn.execute("""
+                UPDATE episodes SET views = views + 1 
+                WHERE series_code = $1 AND episode_number = $2;
+            """, series_code, episode_number)
+            ep["views"] += 1
+        return ep
+
+
+async def delete_episode(series_code: int, episode_number: int) -> bool:
+    """Serialdan bitta qismni o'chirish"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        res = await conn.execute("""
+            DELETE FROM episodes 
+            WHERE series_code = $1 AND episode_number = $2;
+        """, series_code, episode_number)
+        return not res.endswith("0")
+
+
+async def close_pool() -> None:
+    """PostgreSQL ulanish poolini yopish"""
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
+
+

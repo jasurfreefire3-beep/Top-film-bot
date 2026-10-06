@@ -22,3 +22,24 @@ class AddChannelState(StatesGroup):
     waiting_for_channel = State()      # Kanal ID yoki @username yoki post forwardi
     waiting_for_invite_link = State()  # Taklif havolasi
 
+
+class AddSeriesState(StatesGroup):
+    waiting_for_title = State()  # Serial nomi
+    waiting_for_code = State()   # Serial kodi
+
+
+class AddEpisodeState(StatesGroup):
+    waiting_for_series_code = State()    # Serial kodi
+    waiting_for_episode_number = State() # Qism raqami
+    waiting_for_video = State()          # Qism videosi
+
+
+class DeleteEpisodeState(StatesGroup):
+    waiting_for_series_code = State()
+    waiting_for_episode_number = State()
+
+
+class DeleteSeriesState(StatesGroup):
+    waiting_for_series_code = State()
+
+
