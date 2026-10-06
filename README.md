@@ -63,6 +63,8 @@ Python va zamonaviy **aiogram 3** freymvorki asosida yaratilgan professional Tel
   - Kino yoki serial nomi orqali qidirish (masalan: `Qasoskorlar`, `Kurtlar`). Bir nechta natija chiqsa, qulay tugmalar orqali tanlash imkoniyati.
 - **👁 Ko'rishlar va yuklanishlar hisoblagichi**:
   - Kino yoki serial yuborilganda uning nomi ostida necha marta yuklangani aniq ko'rsatiladi.
+- **🖼 Avto Video Cover (Muqova)**:
+  - Har bir film va serial qismi yuborilayotganda `cover.jpeg` rasmi avtomatik tarzda video ustiga professional muqova (thumbnail/cover) sifatida biriktiriladi.
 
 ---
 

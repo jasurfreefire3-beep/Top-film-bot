@@ -26,6 +26,7 @@ from keyboards.user_kb import (
 )
 import logging
 from services.subscription import check_user_subscription
+from services.cover import get_video_cover, get_video_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def is_admin(user_id: int) -> bool:
 
 
 async def send_movie(message_or_call, movie: dict, user_id: int = None):
-    """Kinoni foydalanuvchiga yuboruvchi yordamchi funksiya"""
+    """Kinoni foydalanuvchiga yuboruvchi yordamchi funksiya (muqova/cover bilan)"""
     if user_id is None:
         user_id = message_or_call.from_user.id
 
@@ -59,12 +60,30 @@ async def send_movie(message_or_call, movie: dict, user_id: int = None):
 
     try:
         if file_type == "video":
-            await target.answer_video(
-                video=file_id,
-                caption=caption,
-                reply_markup=kb,
-                parse_mode="HTML"
-            )
+            thumb_file = get_video_thumbnail()
+            cover_file = get_video_cover()
+
+            kwargs = {
+                "video": file_id,
+                "caption": caption,
+                "reply_markup": kb,
+                "parse_mode": "HTML"
+            }
+            if thumb_file:
+                kwargs["thumbnail"] = thumb_file
+            if cover_file:
+                kwargs["cover"] = cover_file
+
+            try:
+                await target.answer_video(**kwargs)
+            except Exception as e_cover:
+                logger.warning(f"Video cover bilan yuborishda ogohlantirish: {e_cover}. Coversiz yuborilmoqda...")
+                await target.answer_video(
+                    video=file_id,
+                    caption=caption,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
         else:
             await target.answer_document(
                 document=file_id,
@@ -135,12 +154,30 @@ async def send_episode_video(message_or_call, series: dict, episode: dict, user_
 
     try:
         if file_type == "video":
-            await target.answer_video(
-                video=file_id,
-                caption=caption,
-                reply_markup=kb,
-                parse_mode="HTML"
-            )
+            thumb_file = get_video_thumbnail()
+            cover_file = get_video_cover()
+
+            kwargs = {
+                "video": file_id,
+                "caption": caption,
+                "reply_markup": kb,
+                "parse_mode": "HTML"
+            }
+            if thumb_file:
+                kwargs["thumbnail"] = thumb_file
+            if cover_file:
+                kwargs["cover"] = cover_file
+
+            try:
+                await target.answer_video(**kwargs)
+            except Exception as e_cover:
+                logger.warning(f"Qismni cover bilan yuborishda ogohlantirish: {e_cover}. Coversiz yuborilmoqda...")
+                await target.answer_video(
+                    video=file_id,
+                    caption=caption,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
         else:
             await target.answer_document(
                 document=file_id,
