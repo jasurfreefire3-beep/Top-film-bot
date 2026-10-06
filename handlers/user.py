@@ -24,7 +24,10 @@ from keyboards.user_kb import (
     get_episodes_selection_kb,
     get_episode_player_kb,
 )
+import logging
 from services.subscription import check_user_subscription
+
+logger = logging.getLogger(__name__)
 
 user_router = Router()
 
@@ -49,26 +52,38 @@ async def send_movie(message_or_call, movie: dict, user_id: int = None):
     )
 
     kb = get_movie_actions_kb(movie["code"], BOT_USERNAME, is_saved=is_saved)
-    send_func = message_or_call.answer_video if movie["file_type"] == "video" else message_or_call.answer_document
+    file_id = movie["file_id"]
+    file_type = movie.get("file_type", "video")
+
+    target = message_or_call.message if isinstance(message_or_call, CallbackQuery) else message_or_call
 
     try:
-        await send_func(
-            video=movie["file_id"] if movie["file_type"] == "video" else None,
-            document=movie["file_id"] if movie["file_type"] == "document" else None,
-            caption=caption,
-            reply_markup=kb,
-            parse_mode="HTML"
-        )
-    except Exception:
-        try:
-            await message_or_call.answer_document(
-                document=movie["file_id"],
+        if file_type == "video":
+            await target.answer_video(
+                video=file_id,
                 caption=caption,
                 reply_markup=kb,
                 parse_mode="HTML"
             )
-        except Exception:
-            await message_or_call.answer("❌ Kinoni yuklashda xatolik yuz berdi.")
+        else:
+            await target.answer_document(
+                document=file_id,
+                caption=caption,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"Kino yuborishda xatolik: {e}")
+        try:
+            await target.answer_document(
+                document=file_id,
+                caption=caption,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+        except Exception as e2:
+            logger.error(f"Fallback ham ishlamadi: {e2}")
+            await target.answer("❌ Kinoni yuklashda xatolik yuz berdi.")
 
 
 async def send_series_menu(message_or_call, series: dict, user_id: int):
@@ -90,11 +105,16 @@ async def send_series_menu(message_or_call, series: dict, user_id: int):
 
     if isinstance(message_or_call, Message):
         await message_or_call.answer(text, reply_markup=kb, parse_mode="HTML")
-    else:
-        try:
-            await message_or_call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            await message_or_call.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    elif isinstance(message_or_call, CallbackQuery):
+        msg = message_or_call.message
+        # Agar oldingi xabar video, rasm yoki hujjat bo'lsa, edit_text ishlamaydi, yangi xabar qilib yuboramiz
+        if msg.video or msg.photo or msg.document:
+            await msg.answer(text, reply_markup=kb, parse_mode="HTML")
+        else:
+            try:
+                await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            except Exception:
+                await msg.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 async def send_episode_video(message_or_call, series: dict, episode: dict, user_id: int):
@@ -108,26 +128,38 @@ async def send_episode_video(message_or_call, series: dict, episode: dict, user_
         f"🤖 <a href=\"https://t.me/{BOT_USERNAME}\">TOP FILM</a>"
     )
     kb = get_episode_player_kb(series["code"], episode["episode_number"], BOT_USERNAME, is_saved=is_saved)
+    file_id = episode["file_id"]
+    file_type = episode.get("file_type", "video")
 
-    send_func = message_or_call.answer_video if episode["file_type"] == "video" else message_or_call.answer_document
+    target = message_or_call.message if isinstance(message_or_call, CallbackQuery) else message_or_call
+
     try:
-        await send_func(
-            video=episode["file_id"] if episode["file_type"] == "video" else None,
-            document=episode["file_id"] if episode["file_type"] == "document" else None,
-            caption=caption,
-            reply_markup=kb,
-            parse_mode="HTML"
-        )
-    except Exception:
-        try:
-            await message_or_call.answer_document(
-                document=episode["file_id"],
+        if file_type == "video":
+            await target.answer_video(
+                video=file_id,
                 caption=caption,
                 reply_markup=kb,
                 parse_mode="HTML"
             )
-        except Exception:
-            await message_or_call.answer("❌ Qismni yuklashda xatolik yuz berdi.")
+        else:
+            await target.answer_document(
+                document=file_id,
+                caption=caption,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"Qism yuborishda xatolik: {e}")
+        try:
+            await target.answer_document(
+                document=file_id,
+                caption=caption,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+        except Exception as e2:
+            logger.error(f"Fallback ham ishlamadi: {e2}")
+            await target.answer("❌ Qismni yuklashda xatolik yuz berdi.")
 
 
 @user_router.message(CommandStart())

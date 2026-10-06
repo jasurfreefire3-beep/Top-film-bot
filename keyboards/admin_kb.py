@@ -46,6 +46,43 @@ def get_series_admin_menu() -> InlineKeyboardMarkup:
     )
 
 
+def get_admin_series_list_kb(series_list: list) -> InlineKeyboardMarkup:
+    """Seriallar ro'yxati uchun har bir serialga bosiladigan tugmali menyu"""
+    keyboard = []
+    for s in series_list:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"📺 {s['title'][:25]} ({s['episode_count']} qism) [#{s['code']}]",
+                callback_data=f"admin_view_series_{s['code']}"
+            )
+        ])
+    keyboard.append([
+        InlineKeyboardButton(text="➕ Yangi serial yaratish", callback_data="admin_add_series")
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Seriallar menyusiga qaytish", callback_data="admin_series_menu")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_admin_single_series_kb(series_code: int) -> InlineKeyboardMarkup:
+    """Aniq bitta serial uchun boshqaruv tugmalari"""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎬 Qism qo'shish", callback_data=f"admin_quick_add_ep_{series_code}"),
+                InlineKeyboardButton(text="🗑 Qism o'chirish", callback_data=f"admin_quick_del_ep_{series_code}")
+            ],
+            [
+                InlineKeyboardButton(text="❌ Serialni o'chirish", callback_data=f"admin_quick_del_ser_{series_code}")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Seriallar ro'yxatiga qaytish", callback_data="admin_list_series")
+            ]
+        ]
+    )
+
+
 def get_channels_menu(channels: list) -> InlineKeyboardMarkup:
     """Majburiy obuna kanallari ro'yxati va boshqaruvi"""
     keyboard = []
