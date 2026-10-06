@@ -18,3 +18,4 @@ RUN mkdir -p /app/data
 
 # Botni ishga tushirish
 CMD ["python", "main.py"]
+

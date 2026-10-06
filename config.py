@@ -13,12 +13,9 @@ BOT_USERNAME = os.getenv("BOT_USERNAME", "topfilmlar_robot").replace("@", "")
 ADMINS_RAW = os.getenv("ADMIN_ID", "8991315532")
 ADMINS = [int(admin_id.strip()) for admin_id in ADMINS_RAW.split(",") if admin_id.strip().isdigit()]
 
-db_env = os.getenv("DATABASE_PATH")
-if db_env:
-    DATABASE_PATH = Path(db_env)
-else:
-    DATABASE_PATH = BASE_DIR / "kino_bot.db"
-
-# Agar papka mavjud bo'lmasa yaratish
-DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-
+# PostgreSQL sozlamalari
+DB_HOST = os.getenv("DB_HOST", "psql.fr-roub1.bengt.wasmernet.com")
+DB_PORT = int(os.getenv("DB_PORT", "20184"))
+DB_NAME = os.getenv("DB_NAME", "TopFilm")
+DB_USER = os.getenv("DB_USER", "user_162b547c")
+DB_PASS = os.getenv("DB_PASS", "pw_eRvi5x1ojzOGN33QKA9Qtj6i9TVTqriq")
