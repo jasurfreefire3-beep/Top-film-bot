@@ -1,0 +1,17 @@
+# Virtual muhit
+venv/
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ma'lumotlar bazasi va loglar
+*.db
+*.log
+
+# IDE sozlamalari
+.vscode/
+.idea/
+.DS_Store
